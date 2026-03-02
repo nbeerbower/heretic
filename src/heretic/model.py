@@ -165,10 +165,17 @@ class Model:
         # This may cause LoRA adapters to be attached to unrelated modules (e.g. "conv.o_proj"),
         # but this is harmless as we only abliterate the modules we target in `abliterate()`,
         # leaving the others at their default (identity) state.
-        # NOTE: This will need to be updated when hybrid layer support (#43) is merged.
-        target_modules = [
-            comp.split(".")[-1] for comp in self.get_abliterable_components()
-        ]
+        # Hybrid architectures (e.g. Qwen3.5) may use different module names across
+        # layer types, so we collect targets from all distinct layer types.
+        target_modules_set: set[str] = set()
+        seen_layer_types: set[type] = set()
+        for layer_index, layer in enumerate(self.get_layers()):
+            layer_type = type(layer)
+            if layer_type not in seen_layer_types:
+                seen_layer_types.add(layer_type)
+                for comp in self.get_layer_modules(layer_index).keys():
+                    target_modules_set.add(comp.split(".")[-1])
+        target_modules = list(target_modules_set)
 
         if self.settings.row_normalization != RowNormalization.FULL:
             # Rank 1 is sufficient for directional ablation without renormalization.
