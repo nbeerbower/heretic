@@ -168,20 +168,21 @@ class Model:
         # Hybrid architectures (e.g. Qwen3.5) may use different module attribute
         # names across layer types (e.g. o_proj vs out_proj), so we find the
         # actual attribute names by matching abliterable modules against each
-        # distinct layer type's named_modules().
+        # layer's named_modules(). We can't deduplicate by type(layer) because
+        # hybrid models may use a single class for all layers.
         target_modules_set: set[str] = set()
-        seen_layer_types: set[type] = set()
         for layer_index, layer in enumerate(self.get_layers()):
-            layer_type = type(layer)
-            if layer_type not in seen_layer_types:
-                seen_layer_types.add(layer_type)
-                abliterable_ids = set()
-                for mods in self.get_layer_modules(layer_index).values():
-                    for mod in mods:
-                        abliterable_ids.add(id(mod))
-                for name, mod in layer.named_modules():
-                    if id(mod) in abliterable_ids:
-                        target_modules_set.add(name.split(".")[-1])
+            prev_size = len(target_modules_set)
+            abliterable_ids = set()
+            for mods in self.get_layer_modules(layer_index).values():
+                for mod in mods:
+                    abliterable_ids.add(id(mod))
+            for name, mod in layer.named_modules():
+                if id(mod) in abliterable_ids:
+                    target_modules_set.add(name.split(".")[-1])
+            # Stop once a full pass adds nothing new (all layer variants seen).
+            if len(target_modules_set) == prev_size and layer_index >= 3:
+                break
         target_modules = list(target_modules_set)
 
         if self.settings.row_normalization != RowNormalization.FULL:
