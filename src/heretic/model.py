@@ -165,16 +165,23 @@ class Model:
         # This may cause LoRA adapters to be attached to unrelated modules (e.g. "conv.o_proj"),
         # but this is harmless as we only abliterate the modules we target in `abliterate()`,
         # leaving the others at their default (identity) state.
-        # Hybrid architectures (e.g. Qwen3.5) may use different module names across
-        # layer types, so we collect targets from all distinct layer types.
+        # Hybrid architectures (e.g. Qwen3.5) may use different module attribute
+        # names across layer types (e.g. o_proj vs out_proj), so we find the
+        # actual attribute names by matching abliterable modules against each
+        # distinct layer type's named_modules().
         target_modules_set: set[str] = set()
         seen_layer_types: set[type] = set()
         for layer_index, layer in enumerate(self.get_layers()):
             layer_type = type(layer)
             if layer_type not in seen_layer_types:
                 seen_layer_types.add(layer_type)
-                for comp in self.get_layer_modules(layer_index).keys():
-                    target_modules_set.add(comp.split(".")[-1])
+                abliterable_ids = set()
+                for mods in self.get_layer_modules(layer_index).values():
+                    for mod in mods:
+                        abliterable_ids.add(id(mod))
+                for name, mod in layer.named_modules():
+                    if id(mod) in abliterable_ids:
+                        target_modules_set.add(name.split(".")[-1])
         target_modules = list(target_modules_set)
 
         if self.settings.row_normalization != RowNormalization.FULL:
