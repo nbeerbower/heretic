@@ -359,9 +359,11 @@ class Model:
         with suppress(Exception):
             try_add("attn.o_proj", layer.self_attn.o_proj)  # ty:ignore[possibly-missing-attribute]
 
-        # Hybrid linear attention (e.g. Qwen3.5).
-        with suppress(Exception):
-            try_add("attn.o_proj", layer.linear_attn.out_proj)  # ty:ignore[possibly-missing-attribute]
+        # Hybrid linear attention (e.g. Qwen3.5) is skipped here because
+        # GatedDeltaNet's out_proj does not respond well to directional
+        # abliteration — the refusal signal flows differently through linear
+        # attention (convolutions, delta rules, exponential decay gates)
+        # than through standard softmax attention.
 
         # Most dense models.
         with suppress(Exception):
