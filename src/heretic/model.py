@@ -395,7 +395,15 @@ class Model:
         return modules
 
     def get_abliterable_components(self) -> list[str]:
-        return list(self.get_layer_modules(0).keys())
+        # Collect from all layers since hybrid architectures (e.g. Qwen3.5)
+        # may have different components across layer types.
+        components: set[str] = set()
+        for layer_index in range(len(self.get_layers())):
+            prev_size = len(components)
+            components.update(self.get_layer_modules(layer_index).keys())
+            if len(components) == prev_size and layer_index >= 3:
+                break
+        return list(components)
 
     def abliterate(
         self,
